@@ -1,5 +1,1 @@
-/api/* http://103.103.23.250:8080/api/:splat 200
-/media/* http://103.103.23.250:8080/media/:splat 200
-/hls/* http://103.103.23.250:8080/hls/:splat 200
-/uploads/* http://103.103.23.250:8080/uploads/:splat 200
 /* /index.html 200
