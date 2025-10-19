@@ -394,6 +394,7 @@ export default function Dashboard() {
                   <th className="px-3 py-2">Link Direct</th>
                   <th className="px-3 py-2">Link Expiring</th>
                   <th className="px-3 py-2">Preview</th>
+                  <th className="px-3 py-2">Hapus</th>
                 </tr>
               </thead>
               <tbody>
@@ -429,6 +430,27 @@ export default function Dashboard() {
                     </td>
                     <td className="px-3 py-3">
                       <Link to={`/preview/${v.id}`} className="inline-flex items-center gap-1 rounded-md bg-white/10 px-3 py-1 text-white/80 hover:bg-white/15">Buka preview</Link>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Hapus video #${v.id}? Aksi ini tidak bisa dibatalkan.`)) return
+                          try {
+                            const res = await fetch(api(`/api/videos/${v.id}`), { method: 'DELETE' })
+                            if (!res.ok) {
+                              const d = await res.json().catch(() => ({}))
+                              throw new Error(d.error || `Gagal hapus (${res.status})`)
+                            }
+                            setStatusMsg(`Video #${v.id} berhasil dihapus.`)
+                            fetchVideos()
+                          } catch (e) {
+                            setStatusMsg(e.message)
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-600/80 px-3 py-1 text-white hover:bg-red-600"
+                      >
+                        Hapus
+                      </button>
                     </td>
                   </tr>
                 ))}
