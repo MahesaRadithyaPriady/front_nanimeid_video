@@ -26,6 +26,35 @@ function useCdn(src, { as = 'script' } = {}) {
   }, [src, as])
 }
 
+// Ensure external JS is loaded before use
+function useScript(src) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    let s = document.querySelector(`script[src="${src}"]`)
+    const onLoad = () => {
+      s?.setAttribute('data-loaded', 'true')
+      setReady(true)
+    }
+    if (s) {
+      if (s.getAttribute('data-loaded') === 'true') {
+        setReady(true)
+        return
+      }
+      s.addEventListener('load', onLoad)
+    } else {
+      s = document.createElement('script')
+      s.src = src
+      s.async = true
+      s.addEventListener('load', onLoad)
+      document.body.appendChild(s)
+    }
+    return () => {
+      s?.removeEventListener('load', onLoad)
+    }
+  }, [src])
+  return ready
+}
+
 export default function Preview() {
   const { id } = useParams()
   const videoRef = useRef(null)
@@ -33,10 +62,10 @@ export default function Preview() {
   const [error, setError] = useState('')
   const [signed, setSigned] = useState({ url: '', exp: 0, video: null })
 
-  // Load Plyr CSS/JS and hls.js via CDN
+  // Load Plyr CSS and wait for JS libraries to be ready
   useCdn('https://cdn.jsdelivr.net/npm/plyr@3/dist/plyr.css', { as: 'style' })
-  useCdn('https://cdn.jsdelivr.net/npm/plyr@3/dist/plyr.polyfilled.min.js', { as: 'script' })
-  useCdn('https://cdn.jsdelivr.net/npm/hls.js@latest', { as: 'script' })
+  const plyrReady = useScript('https://cdn.jsdelivr.net/npm/plyr@3/dist/plyr.polyfilled.min.js')
+  const hlsReady = useScript('https://cdn.jsdelivr.net/npm/hls.js@latest')
 
   useEffect(() => {
     let player
@@ -53,10 +82,14 @@ export default function Preview() {
         const el = videoRef.current
         if (!el) return
 
+        // wait until Plyr script is ready before initializing
+        if (!plyrReady) {
+          return
+        }
         const Plyr = window.Plyr
 
         // Prefer hls.js when supported, even if URL doesn't end with .m3u8 (e.g., signed /media route)
-        if (window.Hls && window.Hls.isSupported()) {
+        if (hlsReady && window.Hls && window.Hls.isSupported()) {
           hls = new window.Hls()
 
           // When manifest is parsed, derive quality options and init Plyr with quality menu
@@ -109,7 +142,7 @@ export default function Preview() {
       try { if (hls) hls.destroy() } catch {}
       try { if (player) player.destroy() } catch {}
     }
-  }, [id])
+  }, [id, plyrReady, hlsReady])
 
   return (
     <div className="min-h-screen bg-black text-white">
