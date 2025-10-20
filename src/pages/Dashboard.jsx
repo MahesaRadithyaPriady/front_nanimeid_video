@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [loadingList, setLoadingList] = useState(false)
   const [encodeProgress, setEncodeProgress] = useState(null)
   const progressESRef = useRef(null)
+  const [uploadProgress, setUploadProgress] = useState(null)
+  const [uploading, setUploading] = useState(false)
 
   const derivedSlug = useMemo(() => (useCustomSlug ? customSlug : slugify(namaVideo)), [useCustomSlug, customSlug, namaVideo])
 
@@ -147,15 +149,51 @@ export default function Dashboard() {
         }
         const fd = new FormData()
         fd.append('file', file)
-        const up = await fetch(api('/api/upload'), {
-          method: 'POST',
-          body: fd,
+        const uploadId = `up-${Date.now()}`
+        setUploading(true)
+        setUploadProgress(0)
+
+        // Use XHR for progress events
+        const urlReq = api(`/api/upload?id=${uploadId}`)
+        const xhr = new XMLHttpRequest()
+        const upPromise = new Promise((resolve, reject) => {
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.min(100, Math.max(1, Math.round((e.loaded / e.total) * 100)))
+              setUploadProgress(pct)
+            }
+          }
+          xhr.onreadystatechange = () => {
+            if (xhr.readyState === 4) {
+              setUploading(false)
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  const resp = JSON.parse(xhr.responseText)
+                  setUploadProgress(100)
+                  resolve(resp)
+                } catch (err) {
+                  reject(err)
+                }
+              } else {
+                try {
+                  const resp = JSON.parse(xhr.responseText)
+                  reject(new Error(resp.error || `Gagal upload (${xhr.status})`))
+                } catch (err) {
+                  reject(new Error(`Gagal upload (${xhr.status})`))
+                }
+              }
+            }
+          }
+          xhr.onerror = () => {
+            setUploading(false)
+            reject(new Error('Network error saat upload'))
+          }
+          xhr.open('POST', urlReq)
+          xhr.send(fd)
         })
-        if (!up.ok) {
-          const data = await up.json().catch(() => ({}))
-          throw new Error(data.error || `Gagal upload (${up.status})`)
-        }
-        const { url } = await up.json()
+
+        const upRes = await upPromise
+        const url = upRes.url
         finalUrl = url
         setVideoUrl(url)
       }
@@ -336,6 +374,17 @@ export default function Dashboard() {
 
               {statusMsg && (
                 <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">{statusMsg}</div>
+              )}
+              {uploadProgress !== null && (
+                <div className="mt-2">
+                  <div className="mb-1 flex items-center justify-between text-xs text-white/60">
+                    <span>Upload file</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded bg-white/10">
+                    <div className="h-2 bg-gradient-to-r from-emerald-500 to-lime-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
               )}
               {encodeProgress !== null && (
                 <div className="mt-2">

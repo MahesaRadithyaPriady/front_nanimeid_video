@@ -88,8 +88,19 @@ export default function Preview() {
         }
         const Plyr = window.Plyr
 
-        // Prefer hls.js when supported, even if URL doesn't end with .m3u8 (e.g., signed /media route)
-        if (hlsReady && window.Hls && window.Hls.isSupported()) {
+        // Decide if the URL is HLS by extension/path or Content-Type via HEAD
+        let isHls = /\.m3u8(\?|$)/.test(data.url) || data.url.includes('/hls/')
+        if (!isHls) {
+          try {
+            const head = await fetch(data.url, { method: 'HEAD' })
+            const ct = (head.headers.get('content-type') || '').toLowerCase()
+            if (ct.includes('application/vnd.apple.mpegurl') || ct.includes('application/x-mpegurl')) {
+              isHls = true
+            }
+          } catch {}
+        }
+
+        if (isHls && hlsReady && window.Hls && window.Hls.isSupported()) {
           hls = new window.Hls()
 
           // When manifest is parsed, derive quality options and init Plyr with quality menu
@@ -122,7 +133,7 @@ export default function Preview() {
           hls.loadSource(data.url)
           hls.attachMedia(el)
         } else {
-          // Let browser decide (native HLS on Safari/iOS or MP4)
+          // Not HLS: play natively (no quality menu)
           el.src = data.url
           if (Plyr) {
             player = new Plyr(el, {
